@@ -21,6 +21,15 @@ export interface PlaybackSource {
   provider: VideoProvider;
 }
 
+/**
+ * Result of resolving playback. `ok: false` means we refused to serve the
+ * video (see `reason`) – the caller must NOT render a player. This is how we
+ * guarantee that production never falls back to an unsigned premium embed.
+ */
+export type PlaybackResult =
+  | ({ ok: true } & PlaybackSource)
+  | { ok: false; reason: "unsigned_premium_blocked"; provider: VideoProvider };
+
 // How long a signed playback token stays valid (seconds).
 const TOKEN_TTL_SECONDS = 60 * 60; // 1 hour
 
@@ -73,37 +82,62 @@ function signMux(playbackId: string): PlaybackSource | null {
   };
 }
 
-export function getSignedPlayback(video: Video): PlaybackSource {
+/** Resolve the raw source for a provider (signed if keys allow, else unsigned). */
+function resolveSource(video: Video): PlaybackSource {
   const { video_provider, video_url_or_id } = video;
 
   if (video_provider === "cloudflare") {
-    const signed = signCloudflare(cloudflareUid(video_url_or_id));
-    if (signed) return signed;
-    return {
-      kind: "iframe",
-      src: getEmbedUrl("cloudflare", video_url_or_id),
-      signed: false,
-      provider: "cloudflare",
-    };
+    return (
+      signCloudflare(cloudflareUid(video_url_or_id)) ?? {
+        kind: "iframe",
+        src: getEmbedUrl("cloudflare", video_url_or_id),
+        signed: false,
+        provider: "cloudflare",
+      }
+    );
   }
 
   if (video_provider === "mux") {
     const id = muxPlaybackId(video_url_or_id);
-    const signed = signMux(id);
-    if (signed) return signed;
-    return {
-      kind: "hls",
-      src: `https://stream.mux.com/${id}.m3u8`,
-      signed: false,
-      provider: "mux",
-    };
+    return (
+      signMux(id) ?? {
+        kind: "hls",
+        src: `https://stream.mux.com/${id}.m3u8`,
+        signed: false,
+        provider: "mux",
+      }
+    );
   }
 
-  // Vimeo / YouTube: not the secure premium providers – unsigned embed.
+  // Vimeo / YouTube: not the secure providers – always unsigned embed.
   return {
     kind: "iframe",
     src: getEmbedUrl(video_provider, video_url_or_id),
     signed: false,
     provider: video_provider,
   };
+}
+
+/**
+ * Returns a playback result AFTER access has been verified by the caller.
+ *
+ * HARD RULE (security): in production a PREMIUM video must never be served via
+ * an unsigned URL. If signing keys are missing (or the provider can't be
+ * signed), we refuse with `ok:false` instead of leaking a copyable embed.
+ * - Free videos always play (they are meant to be public).
+ * - In development, unsigned premium playback is allowed for local testing.
+ */
+export function getSignedPlayback(video: Video): PlaybackResult {
+  const source = resolveSource(video);
+  const isProduction = process.env.NODE_ENV === "production";
+
+  if (video.access_level === "premium" && !source.signed && isProduction) {
+    return {
+      ok: false,
+      reason: "unsigned_premium_blocked",
+      provider: source.provider,
+    };
+  }
+
+  return { ok: true, ...source };
 }

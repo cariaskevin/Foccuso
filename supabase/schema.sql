@@ -155,17 +155,18 @@ create trigger protect_profile_columns_trg
   for each row execute function public.protect_profile_columns();
 
 -- ----------------------------------------------------------------------------
--- Safe catalog VIEW: lets members see premium *teasers* (title, thumbnail,
--- category) WITHOUT ever exposing the playback URL/provider. Runs with the
--- view owner's rights (security_invoker = false) and only selects non-sensitive
--- columns for non-hidden videos. This is a deliberate, minimal exposure.
+-- NOTE on premium teasers / catalog:
+-- There is deliberately NO SQL view here. A "security definer" view (one with
+-- security_invoker = false) would trigger a Supabase security advisory and is
+-- easy to get wrong. Instead, premium teasers (title/thumbnail, WITHOUT the
+-- playback URL) are served by a server-side query that selects only safe
+-- columns via the service-role client (see src/lib/catalog.ts). The base
+-- `videos` table keeps strict RLS below, so a non-premium user can never read
+-- video_url_or_id of a premium/hidden video – not through a view, not directly.
 -- ----------------------------------------------------------------------------
-create or replace view public.public_video_catalog
-with (security_invoker = false)
-as
-  select id, title, description, category, thumbnail_url, access_level, created_at
-  from public.videos
-  where access_level <> 'hidden';
+-- Drop the old catalog view if a previous version of this schema created it,
+-- so no security-definer view lingers in the project.
+drop view if exists public.public_video_catalog;
 
 -- ----------------------------------------------------------------------------
 -- Row Level Security
@@ -226,10 +227,6 @@ create policy "videos_delete_admin"
 -- Tables: authenticated users interact through RLS. anon has no access.
 grant select, update on public.profiles to authenticated;
 grant select, insert, update, delete on public.videos to authenticated;
-
--- Catalog view: readable by signed-in members only (never anon).
-revoke all on public.public_video_catalog from anon;
-grant select on public.public_video_catalog to authenticated;
 
 -- ----------------------------------------------------------------------------
 -- Promote yourself to admin (run ONCE, replace the email):

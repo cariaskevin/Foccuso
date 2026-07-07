@@ -20,7 +20,7 @@ als `⚠ requires user credentials` markiert.
 | 7 | Webhook-Events | `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed` | `src/app/api/stripe/webhook/route.ts` |
 | 8 | Webhook-Signatur | `stripe.webhooks.constructEvent()` gegen `STRIPE_WEBHOOK_SECRET` | `src/app/api/stripe/webhook/route.ts` |
 | 9 | Geschützte Seiten serverseitig | `middleware.ts` + `requireUser()`/`requireAdmin()` | `middleware.ts`, `src/lib/auth.ts` |
-| 10 | Video-URLs nicht öffentlich kopierbar | Catalog-View ohne URL; echte URL nur nach RLS-Check; **signierte, kurzlebige Tokens** (RS256) für Cloudflare Stream & Mux, serverseitig gemintet | `src/lib/playback.ts`, `src/lib/jwt.ts`, `supabase/schema.sql` |
+| 10 | Video-URLs nicht öffentlich kopierbar | Teaser-Query ohne URL (kein View); echte URL nur nach RLS-Check; **signierte kurzlebige Tokens** (RS256) für Cloudflare Stream & Mux; **Prod-Hard-Block** bei fehlender Signatur für Premium | `src/lib/playback.ts`, `src/lib/jwt.ts`, `src/lib/catalog.ts`, `supabase/schema.sql` |
 | 11 | Erst committen nach Build/TS/Tests | Build + TS + Lint grün; Live-Tests siehe unten | — |
 | 12 | Diese Datei | — | `SECURITY_CHECKLIST.md` |
 
@@ -60,9 +60,9 @@ als `⚠ requires user credentials` markiert.
 
 | Risiko | Status | Empfehlung |
 | ------ | ------ | ---------- |
-| **Signed Playback** – implementiert für Cloudflare Stream (signierter iframe-Token) und Mux (tokenisierte HLS-URL), RS256 serverseitig in `src/lib/playback.ts`/`jwt.ts`. Fällt ohne konfigurierte Keys auf unsignierten Embed zurück (nur Dev) und meldet `signed:false` – kein Fake. | **aktiv, sobald Keys gesetzt** | Signing-Keys als ENV setzen (`CLOUDFLARE_STREAM_*` bzw. `MUX_SIGNING_*`) **und** in Cloudflare `requireSignedURLs=true` / in Mux eine *signed* Playback-ID verwenden. Sonst bleiben Videos öffentlich abspielbar. |
+| **Signed Playback** – Cloudflare Stream (signierter iframe-Token) + Mux (tokenisierte HLS-URL), RS256 serverseitig in `src/lib/playback.ts`/`jwt.ts`. **In Produktion wird ein Premium-Video ohne gültige Signatur HART geblockt** (`getSignedPlayback` liefert `ok:false`, es wird KEIN unsignierter Embed gerendert). In Development ist unsigniert für lokale Tests erlaubt. | **aktiv** | Signing-Keys als ENV setzen (`CLOUDFLARE_STREAM_*` bzw. `MUX_SIGNING_*`) **und** in Cloudflare `requireSignedURLs=true` / in Mux eine *signed* Playback-ID verwenden – sonst bleibt Premium in Prod geblockt (Admin sieht Setup-Hinweis). |
 | **Next.js Advisories** – `next@14.2.35` ist die neueste 14.2.x, es bestehen aber Advisories (Image-Optimization-DoS, RSC-Cache-Poisoning, WS-SSRF), deren Fix erst in Next 16 vorliegt. | dokumentiert | Upgrade auf Next 15/16 einplanen und regressionstesten. Für V1 vertretbar, da App Router ohne Pages-i18n. |
-| **Catalog-View** zeigt Premium-Titel/Thumbnails auch Free-Usern (bewusst, als Teaser) – **ohne** Playback-URL. | gewollt | Falls Titel geheim sein sollen: View auf `access_level='free'` einschränken. |
+| **Premium-Teaser** – Titel/Thumbnails von Premium-Videos sind Free-Usern sichtbar (bewusst, als Upsell) – **ohne** Playback-URL. Kein SQL-View mehr: sichere serverseitige Query (`src/lib/catalog.ts`) selektiert nur unkritische Spalten. | gewollt | Falls Titel geheim sein sollen: in `getCatalog` auf `access_level='free'` einschränken. |
 | **Rate Limiting** auf Auth/Checkout-Routen | nicht enthalten | Vor Launch z. B. Upstash/Vercel-Ratelimit ergänzen. |
 | **E-Mail-Bestätigung** | Supabase-Einstellung | Für Produktion aktivieren. |
 
@@ -122,8 +122,8 @@ als `⚠ requires user credentials` markiert.
 ### Video-Sicherheit
 - [ ] Als Free-User in der Bibliothek: Premium-Video zeigt Schloss.
 - [ ] Netzwerk-Tab prüfen: In den Antworten des Free-Users taucht **keine**
-  `video_url_or_id` von Premium-Videos auf (Catalog-View liefert sie nicht,
-  RLS blockt die echte Tabelle).
+  `video_url_or_id` von Premium-Videos auf (Teaser-Query selektiert die Spalte
+  nie, RLS blockt die echte Tabelle).
 - [ ] Direkter Aufruf von `/library/<premium-id>` als Free-User → Upgrade-Seite,
   **kein** Player.
 

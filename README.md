@@ -93,8 +93,7 @@ npm run dev                  # http://localhost:3000
    `service_role` Key kopieren und in `.env.local` eintragen.
 3. **SQL Editor** öffnen, den kompletten Inhalt von
    [`supabase/schema.sql`](./supabase/schema.sql) einfügen und ausführen.
-   Das legt Tabellen, Funktionen, Trigger, die Catalog-View und **alle
-   RLS-Policies** an.
+   Das legt Tabellen, Funktionen, Trigger und **alle RLS-Policies** an.
 4. **Authentication → URL Configuration**: `Site URL` auf deine App-URL setzen
    und `http://localhost:3000/auth/callback` (plus deine Prod-URL) als
    Redirect-URL hinzufügen.

@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { AppNav } from "@/components/AppNav";
 import { VideoCard } from "@/components/VideoCard";
 import { UpgradeCard } from "@/components/UpgradeCard";
-import { createClient } from "@/lib/supabase/server";
+import { getCatalog } from "@/lib/catalog";
 import { hasPremiumAccess } from "@/lib/access";
 import { CATEGORIES, type Category } from "@/lib/config";
 import type { Video } from "@/types/database";
@@ -22,18 +22,9 @@ export default async function LibraryPage({
     ? (searchParams.category as Category)
     : null;
 
-  const supabase = createClient();
-  // Query the safe catalog VIEW – it never returns playback URLs. RLS on the
-  // view restricts rows to non-hidden content.
-  let query = supabase
-    .from("public_video_catalog")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (activeCategory) query = query.eq("category", activeCategory);
-
-  const { data: catalog } = await query;
-  const videos = catalog ?? [];
+  // Safe catalog: a server-side query that selects ONLY non-sensitive columns.
+  // The playback URL is never fetched here, so it can never reach the browser.
+  const videos = await getCatalog(activeCategory);
 
   return (
     <>

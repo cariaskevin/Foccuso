@@ -39,8 +39,9 @@ export type VideoInput = Omit<Video, "id" | "created_at">;
 
 /**
  * Safe catalog shape: everything EXCEPT the sensitive playback columns
- * (video_url_or_id, video_provider). Backed by the `public_video_catalog`
- * view so premium teasers can be listed without ever leaking playback URLs.
+ * (video_url_or_id, video_provider). Returned by the server-side safe-column
+ * query in src/lib/catalog.ts so premium teasers can be listed without ever
+ * fetching or leaking playback URLs.
  */
 export type CatalogVideo = Omit<Video, "video_url_or_id" | "video_provider">;
 
@@ -66,12 +67,7 @@ export interface Database {
         Relationships: [];
       };
     };
-    Views: {
-      public_video_catalog: {
-        Row: CatalogVideo;
-        Relationships: [];
-      };
-    };
+    Views: Record<string, never>;
     Functions: Record<string, never>;
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
