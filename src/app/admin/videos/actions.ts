@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { rateLimit } from "@/lib/ratelimit";
 import {
   ACCESS_LEVELS,
   CATEGORIES,
@@ -13,6 +14,16 @@ import {
   type VideoProvider,
 } from "@/lib/config";
 import type { VideoInput } from "@/types/database";
+
+/** Server-side rate limit for admin mutations, keyed by the admin's user id. */
+async function guardAdmin() {
+  const session = await requireAdmin(); // server-side admin gate
+  const rl = await rateLimit("adminMutation", session.userId);
+  if (!rl.success) {
+    throw new Error("Zu viele Anfragen. Bitte versuche es später erneut.");
+  }
+  return session;
+}
 
 function parseVideoForm(formData: FormData): VideoInput {
   const title = String(formData.get("title") || "").trim();
@@ -45,7 +56,7 @@ function parseVideoForm(formData: FormData): VideoInput {
 }
 
 export async function createVideo(formData: FormData) {
-  await requireAdmin(); // server-side admin gate
+  await guardAdmin();
   const input = parseVideoForm(formData);
   const supabase = createClient();
   const { error } = await supabase.from("videos").insert(input);
@@ -56,7 +67,7 @@ export async function createVideo(formData: FormData) {
 }
 
 export async function updateVideo(id: string, formData: FormData) {
-  await requireAdmin();
+  await guardAdmin();
   const input = parseVideoForm(formData);
   const supabase = createClient();
   const { error } = await supabase.from("videos").update(input).eq("id", id);
@@ -67,7 +78,7 @@ export async function updateVideo(id: string, formData: FormData) {
 }
 
 export async function deleteVideo(formData: FormData) {
-  await requireAdmin();
+  await guardAdmin();
   const id = String(formData.get("id") || "");
   if (!id) throw new Error("Fehlende Video-ID.");
   const supabase = createClient();

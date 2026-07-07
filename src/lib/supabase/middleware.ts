@@ -31,9 +31,15 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // If Supabase is briefly unreachable, don't 500 every request – treat as
+  // unauthenticated and let route-level guards handle it.
+  let user = null;
+  try {
+    const result = await supabase.auth.getUser();
+    user = result.data.user;
+  } catch {
+    user = null;
+  }
 
   const path = request.nextUrl.pathname;
   const isProtected =

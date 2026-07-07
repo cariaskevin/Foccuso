@@ -63,8 +63,37 @@ als `⚠ requires user credentials` markiert.
 | **Signed Playback** – Cloudflare Stream (signierter iframe-Token) + Mux (tokenisierte HLS-URL), RS256 serverseitig in `src/lib/playback.ts`/`jwt.ts`. **In Produktion wird ein Premium-Video ohne gültige Signatur HART geblockt** (`getSignedPlayback` liefert `ok:false`, es wird KEIN unsignierter Embed gerendert). In Development ist unsigniert für lokale Tests erlaubt. | **aktiv** | Signing-Keys als ENV setzen (`CLOUDFLARE_STREAM_*` bzw. `MUX_SIGNING_*`) **und** in Cloudflare `requireSignedURLs=true` / in Mux eine *signed* Playback-ID verwenden – sonst bleibt Premium in Prod geblockt (Admin sieht Setup-Hinweis). |
 | **Next.js Advisories** – `next@14.2.35` ist die neueste 14.2.x, es bestehen aber Advisories (Image-Optimization-DoS, RSC-Cache-Poisoning, WS-SSRF), deren Fix erst in Next 16 vorliegt. | dokumentiert | Upgrade auf Next 15/16 einplanen und regressionstesten. Für V1 vertretbar, da App Router ohne Pages-i18n. |
 | **Premium-Teaser** – Titel/Thumbnails von Premium-Videos sind Free-Usern sichtbar (bewusst, als Upsell) – **ohne** Playback-URL. Kein SQL-View mehr: sichere serverseitige Query (`src/lib/catalog.ts`) selektiert nur unkritische Spalten. | gewollt | Falls Titel geheim sein sollen: in `getCatalog` auf `access_level='free'` einschränken. |
-| **Rate Limiting** auf Auth/Checkout-Routen | nicht enthalten | Vor Launch z. B. Upstash/Vercel-Ratelimit ergänzen. |
+| **Rate Limiting** – serverseitig auf allen Auth-Flows, Stripe-Checkout/Portal und Admin-Mutations (`src/lib/ratelimit.ts`). Upstash Redis (verteilt) sobald ENV gesetzt, sonst In-Memory-Fallback (nur Dev, per-Instanz). | **aktiv** | Für Produktion `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` setzen. Ohne Upstash ist der In-Memory-Limiter auf Serverless **nicht zuverlässig** (jede Instanz zählt eigenständig). |
 | **E-Mail-Bestätigung** | Supabase-Einstellung | Für Produktion aktivieren. |
+
+---
+
+## 3b. Rate Limiting (Übersicht)
+
+Alle Limits greifen **serverseitig** (kein Frontend-Fake). Auth-Flows laufen
+bewusst über eigene API-Routen (`/api/auth/*`), damit der Supabase-Aufruf durch
+unseren Server geht und limitiert werden kann.
+
+| Flow | Route / Action | Limit | Schlüssel |
+| --- | --- | --- | --- |
+| Login | `POST /api/auth/login` | 10 / 60s | IP |
+| Register | `POST /api/auth/register` | 5 / 60s | IP |
+| Forgot Password | `POST /api/auth/forgot-password` | 4 / 60s | IP |
+| Reset Password | `POST /api/auth/reset-password` | 10 / 60s | IP |
+| Stripe Checkout | `POST /api/stripe/checkout` | 10 / 60s | IP |
+| Stripe Portal | `POST /api/stripe/portal` | 10 / 60s | IP |
+| Admin Video CRUD | Server Actions (create/update/delete) | 30 / 60s | Admin-User-ID |
+
+Verhalten bei Überschreitung: **HTTP 429** mit neutraler Meldung
+„Zu viele Anfragen. Bitte versuche es später erneut." + `Retry-After`-Header.
+Keine Details (Limits, Account-Existenz) werden geleakt. Admin-Server-Actions
+werfen bei Überschreitung einen neutralen Fehler (Server Actions liefern keinen
+HTTP-Status ans Dokument).
+
+**Production-ready?** Ja – **sobald Upstash gesetzt ist**. Ohne
+`UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` läuft nur der
+In-Memory-Fallback: der zählt pro Serverless-Instanz getrennt und ist damit auf
+Vercel **nicht** verlässlich (nur für lokale Entwicklung gedacht).
 
 ---
 
@@ -75,6 +104,9 @@ als `⚠ requires user credentials` markiert.
 - [x] ESLint ohne Warnungen (`next lint`, Exit 0)
 - [x] Keine Secret-Keys im Code (nur Platzhalter in `.env.example`)
 - [x] `.env*` in `.gitignore`
+- [x] **429-Test bestanden** (In-Memory-Backend, `next dev`): `forgot-password`
+  4×200 dann 429; Login 10×→11. `429`; Body neutral + `Retry-After`; fremde IP
+  weiterhin 200 (Per-IP-Isolation).
 
 > Hinweis: Der Build zeigt eine nicht-fatale Meldung „Failed to patch lockfile“.
 > Das ist ein Offline-Artefakt (Next kann optionale SWC-Plattformpakete nicht

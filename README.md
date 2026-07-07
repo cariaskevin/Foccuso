@@ -75,6 +75,8 @@ committen.**
 | `CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN` | server | optional, z. B. `customer-xxx.cloudflarestream.com` |
 | `MUX_SIGNING_KEY_ID` | **server only** | Mux Signing-Key-ID (Signed Playback) |
 | `MUX_SIGNING_PRIVATE_KEY` | **server only** | Mux Private Key (PEM/base64) |
+| `UPSTASH_REDIS_REST_URL` | **server only** | Upstash Redis REST-URL (Rate Limiting) |
+| `UPSTASH_REDIS_REST_TOKEN` | **server only** | Upstash Redis REST-Token (Rate Limiting) |
 
 Nur `NEXT_PUBLIC_*`-Variablen landen im Browser. Alle anderen bleiben serverseitig.
 
@@ -198,7 +200,20 @@ konfigurierte Keys fällt die Wiedergabe auf einen unsignierten Embed zurück
 (nur für lokale Tests) und meldet `signed: false`. Implementierung:
 `src/lib/playback.ts` + `src/lib/jwt.ts`. Details: `SECURITY_CHECKLIST.md`.
 
-## 11. Test-Checkliste
+## 11. Rate Limiting
+
+Alle sensiblen Flows sind **serverseitig** limitiert (`src/lib/ratelimit.ts`):
+Login, Register, Forgot/Reset Password, Stripe Checkout/Portal und die
+Admin-Video-Mutations. Auth-Flows laufen über eigene API-Routen (`/api/auth/*`),
+damit der Aufruf durch unseren Server geht und wirklich gegriffen werden kann.
+
+Bei Überschreitung: **HTTP 429** + neutrale Meldung + `Retry-After`. Für
+Produktion `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` setzen
+(verteilt). Ohne diese läuft ein In-Memory-Fallback, der **nur lokal**
+zuverlässig ist (pro Serverless-Instanz getrennt). Limits + Details:
+`SECURITY_CHECKLIST.md` → Abschnitt 3b.
+
+## 12. Test-Checkliste
 
 Die vollständige, ausführbare Checkliste steht in
 [`SECURITY_CHECKLIST.md`](./SECURITY_CHECKLIST.md). Kurzfassung:

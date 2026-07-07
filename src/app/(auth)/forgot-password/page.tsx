@@ -2,21 +2,31 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-import { siteConfig } from "@/lib/config";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
     setLoading(true);
-    const supabase = createClient();
-    await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${siteConfig.url}/reset-password`,
+
+    const res = await fetch("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
     });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Bitte versuche es später erneut.");
+      setLoading(false);
+      return;
+    }
+
     // Always show success to avoid leaking which emails are registered.
     setSent(true);
     setLoading(false);
@@ -54,6 +64,11 @@ export default function ForgotPasswordPage() {
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
+        {error && (
+          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            {error}
+          </p>
+        )}
         <button type="submit" className="btn-primary w-full" disabled={loading}>
           {loading ? "Senden…" : "Link senden"}
         </button>

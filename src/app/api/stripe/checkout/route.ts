@@ -1,14 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { siteConfig } from "@/lib/config";
+import { rateLimit } from "@/lib/ratelimit";
+import { ipFromRequest, tooManyRequests } from "@/lib/request";
 
 /**
  * Creates a Stripe Checkout Session for the Velqor Society Premium subscription.
  * Auth is enforced server-side; the secret key never leaves this server route.
  */
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const rl = await rateLimit("checkout", ipFromRequest(req));
+  if (!rl.success) return tooManyRequests(rl);
+
   const priceId = process.env.STRIPE_PREMIUM_PRICE_ID;
   if (!priceId) {
     return NextResponse.json(

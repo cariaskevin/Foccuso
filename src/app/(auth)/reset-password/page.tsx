@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -20,12 +19,15 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true);
-    const supabase = createClient();
-    // The recovery link established a temporary session on page load.
-    const { error } = await supabase.auth.updateUser({ password });
+    const res = await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
 
-    if (error) {
-      setError(error.message);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Passwort konnte nicht gesetzt werden.");
       setLoading(false);
       return;
     }
