@@ -5,7 +5,8 @@ import { AppNav } from "@/components/AppNav";
 import { UpgradeCard } from "@/components/UpgradeCard";
 import { createClient } from "@/lib/supabase/server";
 import { hasPremiumAccess } from "@/lib/access";
-import { getSignedPlayback } from "@/lib/video";
+import { getSignedPlayback } from "@/lib/playback";
+import { HlsPlayer } from "@/components/HlsPlayer";
 
 export const metadata = { title: "Video" };
 
@@ -89,13 +90,17 @@ export default async function WatchPage({
         <BackLink />
         <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-card">
           <div className="aspect-video w-full">
-            <iframe
-              src={playback.embedUrl}
-              title={video.title}
-              className="h-full w-full"
-              allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
+            {playback.kind === "hls" ? (
+              <HlsPlayer src={playback.src} title={video.title} />
+            ) : (
+              <iframe
+                src={playback.src}
+                title={video.title}
+                className="h-full w-full"
+                allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            )}
           </div>
         </div>
         <div className="mt-6">

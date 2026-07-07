@@ -70,6 +70,11 @@ committen.**
 | `NEXT_PUBLIC_PREMIUM_PRICE_AMOUNT` | public | Anzeigepreis (z. B. `19,99`) |
 | `NEXT_PUBLIC_PREMIUM_PRICE_CURRENCY` | public | Währungssymbol (z. B. `€`) |
 | `NEXT_PUBLIC_PREMIUM_PRICE_INTERVAL` | public | Intervall (z. B. `Monat`) |
+| `CLOUDFLARE_STREAM_KEY_ID` | **server only** | Cloudflare Stream Signing-Key-ID (Signed Playback) |
+| `CLOUDFLARE_STREAM_PRIVATE_KEY` | **server only** | Cloudflare Stream Private Key (PEM/base64) |
+| `CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN` | server | optional, z. B. `customer-xxx.cloudflarestream.com` |
+| `MUX_SIGNING_KEY_ID` | **server only** | Mux Signing-Key-ID (Signed Playback) |
+| `MUX_SIGNING_PRIVATE_KEY` | **server only** | Mux Private Key (PEM/base64) |
 
 Nur `NEXT_PUBLIC_*`-Variablen landen im Browser. Alle anderen bleiben serverseitig.
 
@@ -172,12 +177,27 @@ Als Admin unter **/admin/videos**. Speichere die **Provider-ID** (nicht die
 Datei). Beispiele:
 
 - Cloudflare Stream: Video-UID (`iframe.videodelivery.net/<uid>`)
-- Mux: Playback-ID
+- Mux: (signierte) Playback-ID
 - Vimeo: Video-ID
 - YouTube: Video-ID oder URL
 
-Siehe `SECURITY_CHECKLIST.md` → *Signed Playback* für den produktionssicheren
-Ausbau mit signierten Wiedergabe-URLs.
+### Signed Playback (Premium-Schutz)
+
+Premium-Videos werden **nicht** über eine kopierbare URL ausgeliefert. Für die
+beiden sicheren Provider mintet der Server kurzlebige, signierte Tokens
+(RS256, gültig 1 Stunde) – **erst nachdem** der Zugriff geprüft wurde:
+
+- **Cloudflare Stream:** signierter JWT-Token ersetzt die UID in der iframe-URL.
+  Voraussetzung: Signing-Key als ENV + `requireSignedURLs=true` am Video.
+- **Mux:** signierter JWT wird als `?token=` an die HLS-URL gehängt und über
+  einen HLS-Player (`hls.js`) abgespielt. Voraussetzung: Signing-Key als ENV +
+  *signed* Playback-ID.
+
+Die Signing-Keys sind **serverseitig** (`CLOUDFLARE_STREAM_*` / `MUX_SIGNING_*`,
+siehe `.env.example`) und werden nie an den Browser ausgeliefert. Ohne
+konfigurierte Keys fällt die Wiedergabe auf einen unsignierten Embed zurück
+(nur für lokale Tests) und meldet `signed: false`. Implementierung:
+`src/lib/playback.ts` + `src/lib/jwt.ts`. Details: `SECURITY_CHECKLIST.md`.
 
 ## 11. Test-Checkliste
 

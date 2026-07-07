@@ -1,24 +1,13 @@
-import type { Video } from "@/types/database";
 import type { VideoProvider } from "@/lib/config";
 
 /**
- * Builds the iframe embed URL for a given provider + id/url.
- *
- * SECURITY NOTE (see SECURITY_CHECKLIST.md, item "Signed Playback"):
- * For a production launch, premium video access must NOT rely on a plain,
- * copyable embed URL. Cloudflare Stream and Mux both support SIGNED playback:
- *  - Cloudflare Stream: generate a short-lived signed token server-side and
- *    embed `.../<token>/iframe`. Requires STREAM signing keys.
- *  - Mux: create a signed playback ID + a short-lived JWT server-side.
- *    Requires MUX_SIGNING_KEY / MUX_PRIVATE_KEY.
- * The `getSignedPlayback()` stub below is the single seam to implement this.
- * Until real signing keys are provided it returns the unsigned embed, so the
- * feature is *prepared* but not silently faked.
+ * Pure helpers for turning a stored provider id/url into an UNSIGNED embed URL,
+ * plus extracting the bare provider id. No secrets here – safe anywhere.
+ * Signed premium playback lives in `src/lib/playback.ts` (server only).
  */
 export function getEmbedUrl(provider: VideoProvider, idOrUrl: string): string {
   switch (provider) {
     case "cloudflare":
-      // Accept a raw video UID or a full customer subdomain URL.
       if (idOrUrl.startsWith("http")) return idOrUrl;
       return `https://iframe.videodelivery.net/${idOrUrl}`;
     case "mux":
@@ -42,24 +31,25 @@ export function getEmbedUrl(provider: VideoProvider, idOrUrl: string): string {
   }
 }
 
-export interface PlaybackSource {
-  embedUrl: string;
-  signed: boolean;
+/** Extract a bare Cloudflare Stream video UID from an id or full URL. */
+export function cloudflareUid(idOrUrl: string): string {
+  if (!idOrUrl.startsWith("http")) return idOrUrl;
+  try {
+    const parts = new URL(idOrUrl).pathname.split("/").filter(Boolean);
+    return parts[0] || idOrUrl;
+  } catch {
+    return idOrUrl;
+  }
 }
 
-/**
- * Returns a playback source for a video. This runs SERVER-SIDE only and MUST be
- * called after the caller has verified the viewer's access (see access.ts).
- *
- * When signing keys are configured, replace the body to mint a short-lived
- * signed token. Right now it returns the unsigned embed and reports signed:false
- * so the UI / logs make the security posture explicit.
- */
-export function getSignedPlayback(video: Video): PlaybackSource {
-  // TODO(signed-playback): when CLOUDFLARE_STREAM_* / MUX_SIGNING_* are set,
-  // generate a signed token here and return { embedUrl, signed: true }.
-  return {
-    embedUrl: getEmbedUrl(video.video_provider, video.video_url_or_id),
-    signed: false,
-  };
+/** Extract a bare Mux playback id from an id or full stream URL. */
+export function muxPlaybackId(idOrUrl: string): string {
+  const strip = (s: string) => s.replace(/\.m3u8.*$/, "");
+  if (!idOrUrl.startsWith("http")) return strip(idOrUrl);
+  try {
+    const last = new URL(idOrUrl).pathname.split("/").filter(Boolean).pop();
+    return last ? strip(last) : idOrUrl;
+  } catch {
+    return idOrUrl;
+  }
 }

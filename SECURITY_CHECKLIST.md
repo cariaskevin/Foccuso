@@ -20,7 +20,7 @@ als `⚠ requires user credentials` markiert.
 | 7 | Webhook-Events | `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed` | `src/app/api/stripe/webhook/route.ts` |
 | 8 | Webhook-Signatur | `stripe.webhooks.constructEvent()` gegen `STRIPE_WEBHOOK_SECRET` | `src/app/api/stripe/webhook/route.ts` |
 | 9 | Geschützte Seiten serverseitig | `middleware.ts` + `requireUser()`/`requireAdmin()` | `middleware.ts`, `src/lib/auth.ts` |
-| 10 | Video-URLs nicht öffentlich kopierbar | Catalog-View ohne URL; echte URL nur nach RLS-Check; `getSignedPlayback()`-Seam für Cloudflare/Mux | `src/lib/video.ts`, `supabase/schema.sql` |
+| 10 | Video-URLs nicht öffentlich kopierbar | Catalog-View ohne URL; echte URL nur nach RLS-Check; **signierte, kurzlebige Tokens** (RS256) für Cloudflare Stream & Mux, serverseitig gemintet | `src/lib/playback.ts`, `src/lib/jwt.ts`, `supabase/schema.sql` |
 | 11 | Erst committen nach Build/TS/Tests | Build + TS + Lint grün; Live-Tests siehe unten | — |
 | 12 | Diese Datei | — | `SECURITY_CHECKLIST.md` |
 
@@ -60,7 +60,7 @@ als `⚠ requires user credentials` markiert.
 
 | Risiko | Status | Empfehlung |
 | ------ | ------ | ---------- |
-| **Signed Playback** – aktuell liefert `getSignedPlayback()` den unsignierten Embed (kein Fake-„signed“). | vorbereitet, nicht aktiv | Vor echtem Verkauf premium-Videos über Cloudflare Stream *signed URLs* oder Mux *signed playback IDs* ausliefern. Einziger Umbaupunkt: `src/lib/video.ts`. Keys als serverseitige ENV ergänzen. |
+| **Signed Playback** – implementiert für Cloudflare Stream (signierter iframe-Token) und Mux (tokenisierte HLS-URL), RS256 serverseitig in `src/lib/playback.ts`/`jwt.ts`. Fällt ohne konfigurierte Keys auf unsignierten Embed zurück (nur Dev) und meldet `signed:false` – kein Fake. | **aktiv, sobald Keys gesetzt** | Signing-Keys als ENV setzen (`CLOUDFLARE_STREAM_*` bzw. `MUX_SIGNING_*`) **und** in Cloudflare `requireSignedURLs=true` / in Mux eine *signed* Playback-ID verwenden. Sonst bleiben Videos öffentlich abspielbar. |
 | **Next.js Advisories** – `next@14.2.35` ist die neueste 14.2.x, es bestehen aber Advisories (Image-Optimization-DoS, RSC-Cache-Poisoning, WS-SSRF), deren Fix erst in Next 16 vorliegt. | dokumentiert | Upgrade auf Next 15/16 einplanen und regressionstesten. Für V1 vertretbar, da App Router ohne Pages-i18n. |
 | **Catalog-View** zeigt Premium-Titel/Thumbnails auch Free-Usern (bewusst, als Teaser) – **ohne** Playback-URL. | gewollt | Falls Titel geheim sein sollen: View auf `access_level='free'` einschränken. |
 | **Rate Limiting** auf Auth/Checkout-Routen | nicht enthalten | Vor Launch z. B. Upstash/Vercel-Ratelimit ergänzen. |
@@ -126,6 +126,17 @@ als `⚠ requires user credentials` markiert.
   RLS blockt die echte Tabelle).
 - [ ] Direkter Aufruf von `/library/<premium-id>` als Free-User → Upgrade-Seite,
   **kein** Player.
+
+### Signed Playback (`⚠ requires user credentials` – Cloudflare/Mux Keys)
+- [x] RS256-Signatur/-Verifikation kryptografisch geprüft (raw PEM + base64-PEM,
+  Tamper-Test schlägt fehl) – lokal in diesem Build verifiziert.
+- [ ] Cloudflare: `CLOUDFLARE_STREAM_KEY_ID` + `CLOUDFLARE_STREAM_PRIVATE_KEY`
+  setzen, Premium-Video mit `requireSignedURLs=true` → spielt ab; die iframe-URL
+  enthält einen Token statt der UID und läuft nach ~1h ab.
+- [ ] Mux: `MUX_SIGNING_KEY_ID` + `MUX_SIGNING_PRIVATE_KEY` setzen, *signed*
+  Playback-ID → HLS-Player spielt ab; `?token=` in der `.m3u8`-URL vorhanden.
+- [ ] Ohne Keys: Premium-Video spielt via unsigniertem Embed (nur Dev),
+  Posture sichtbar über `signed:false`.
 
 ### Customer Portal
 - [ ] `/account` → „Abo verwalten“ öffnet das Stripe Customer Portal
