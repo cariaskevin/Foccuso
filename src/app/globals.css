@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-base-900 text-gray-200 antialiased;
+  background-image:
+    radial-gradient(60% 40% at 50% 0%, rgba(124, 92, 255, 0.08) 0%, transparent 60%),
+    radial-gradient(40% 30% at 90% 10%, rgba(212, 175, 55, 0.06) 0%, transparent 60%);
+  background-attachment: fixed;
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-6xl px-5 sm:px-6 lg:px-8;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-gold/50 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-primary {
+    @apply btn bg-gold-gradient text-base-900 shadow-glow hover:brightness-110;
+  }
+
+  .btn-secondary {
+    @apply btn border border-white/15 bg-white/5 text-gray-100 hover:border-white/30 hover:bg-white/10;
+  }
+
+  .btn-ghost {
+    @apply btn text-gray-300 hover:text-white;
+  }
+
+  .card {
+    @apply rounded-2xl border border-white/10 bg-base-800/70 shadow-card backdrop-blur;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-white/10 bg-base-700/60 px-4 py-3 text-sm text-gray-100 placeholder-gray-500 outline-none transition focus:border-gold/50 focus:ring-1 focus:ring-gold/40;
+  }
+
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-gray-300;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .gold-text {
+    @apply bg-gold-gradient bg-clip-text text-transparent;
+  }
+
+  .prose-legal h1 {
+    @apply text-3xl font-bold text-white;
+  }
+  .prose-legal h2 {
+    @apply mt-8 text-xl font-semibold text-white;
+  }
+  .prose-legal p,
+  .prose-legal li {
+    @apply mt-3 text-sm leading-relaxed text-gray-400;
+  }
+  .prose-legal ul {
+    @apply mt-2 list-disc pl-5;
+  }
+  .prose-legal strong {
+    @apply text-gray-200;
+  }
+  .prose-legal .note {
+    @apply mt-6 rounded-xl border border-gold/20 bg-gold/5 p-4 text-sm text-gold-soft;
+  }
+}
